@@ -6,88 +6,35 @@
 <title>Chat — Live Room</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: #0d1117;
-    color: #c9d1d9;
-    font-family: system-ui, -apple-system, sans-serif;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 20px;
-    background: #161b22;
-    border-bottom: 1px solid #30363d;
-  }
+  body { background: #0d1117; color: #c9d1d9; font-family: system-ui, -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: #161b22; border-bottom: 1px solid #30363d; }
   header h1 { font-size: 16px; font-weight: 600; color: #58a6ff; }
   .room-info { font-size: 12px; color: #8b949e; }
   .room-info span { color: #58a6ff; }
   .main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  .messages {
-    flex: 1; overflow-y: auto; padding: 16px 20px;
-    display: flex; flex-direction: column; gap: 8px;
-  }
-  .msg {
-    padding: 10px 14px; border-radius: 8px; max-width: 80%;
-    word-wrap: break-word; line-height: 1.5; font-size: 14px;
-  }
-  .msg.me {
-    background: #1f6feb; color: #fff;
-    align-self: flex-end; border-bottom-right-radius: 4px;
-  }
-  .msg.them {
-    background: #21262d; color: #c9d1d9;
-    align-self: flex-start; border-bottom-left-radius: 4px;
-  }
+  .messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { padding: 10px 14px; border-radius: 8px; max-width: 80%; word-wrap: break-word; line-height: 1.5; font-size: 14px; }
+  .msg.me { background: #1f6feb; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.them { background: #21262d; color: #c9d1d9; align-self: flex-start; border-bottom-left-radius: 4px; }
   .msg .name { font-size: 11px; font-weight: 600; margin-bottom: 4px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
   .msg .time { font-size: 10px; opacity: 0.5; margin-top: 4px; text-align: right; }
-  .input-area {
-    display: flex; gap: 8px; padding: 12px 20px;
-    background: #161b22; border-top: 1px solid #30363d;
-  }
-  .input-area input {
-    flex: 1; background: #0d1117; border: 1px solid #30363d;
-    border-radius: 6px; padding: 10px 14px; color: #c9d1d9;
-    font-size: 14px; outline: none;
-  }
+  .input-area { display: flex; gap: 8px; padding: 12px 20px; background: #161b22; border-top: 1px solid #30363d; }
+  .input-area input { flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; color: #c9d1d9; font-size: 14px; outline: none; }
   .input-area input:focus { border-color: #58a6ff; }
-  .input-area button {
-    background: #238636; color: #fff; border: none;
-    border-radius: 6px; padding: 10px 20px; font-size: 14px;
-    cursor: pointer; font-weight: 500;
-  }
+  .input-area input:disabled { opacity: 0.5; }
+  .input-area button { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 500; }
   .input-area button:hover { background: #2ea043; }
   .input-area button:disabled { opacity: 0.5; cursor: default; }
-  .status-bar {
-    padding: 6px 20px; font-size: 11px; color: #8b949e;
-    background: #161b22; border-top: 1px solid #30363d; text-align: center;
-  }
+  .status-bar { padding: 6px 20px; font-size: 11px; color: #8b949e; background: #161b22; border-top: 1px solid #30363d; text-align: center; }
   .status-bar.connected { color: #3fb950; }
-  .join-prompt {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.7);
-    align-items: center; justify-content: center; z-index: 100;
-  }
+  .join-prompt { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; z-index: 100; }
   .join-prompt.show { display: flex; }
-  .join-box {
-    background: #161b22; border: 1px solid #30363d;
-    border-radius: 12px; padding: 30px 40px; text-align: center; max-width: 400px;
-  }
+  .join-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 30px 40px; text-align: center; max-width: 400px; }
   .join-box h2 { color: #c9d1d9; margin-bottom: 8px; font-size: 20px; }
   .join-box p { color: #8b949e; font-size: 13px; margin-bottom: 20px; }
-  .join-box input {
-    width: 100%; background: #0d1117; border: 1px solid #30363d;
-    border-radius: 6px; padding: 10px 14px; color: #c9d1d9;
-    font-size: 14px; outline: none; text-align: center; margin-bottom: 14px;
-  }
+  .join-box input { width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; color: #c9d1d9; font-size: 14px; outline: none; text-align: center; margin-bottom: 14px; }
   .join-box input:focus { border-color: #58a6ff; }
-  .join-box button {
-    background: #238636; color: #fff; border: none;
-    border-radius: 6px; padding: 10px 30px; font-size: 14px; cursor: pointer; font-weight: 500;
-  }
+  .join-box button { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 10px 30px; font-size: 14px; cursor: pointer; font-weight: 500; }
   .join-box button:hover { background: #2ea043; }
 </style>
 </head>
@@ -97,8 +44,7 @@
   <div class="join-box">
     <h2>&#10022; Live Chat</h2>
     <p>Pick a name and join the room</p>
-    <input type="text" id="nameInput" placeholder="Your name..." maxlength="20" autofocus>
-    <br>
+    <input type="text" id="nameInput" placeholder="Your name..." maxlength="20" autofocus><br>
     <button id="joinBtn">Join Room</button>
   </div>
 </div>
@@ -118,9 +64,19 @@
 
 <div class="status-bar" id="statusBar">Connecting...</div>
 
+<script type="importmap">
+{
+  "imports": {
+    "yjs": "https://cdn.jsdelivr.net/npm/yjs@13.6.20/dist/yjs.mjs",
+    "y-websocket": "https://cdn.jsdelivr.net/npm/y-websocket@2.0.4/dist/y-websocket.mjs",
+    "lib0/": "https://cdn.jsdelivr.net/npm/lib0@0.2.100/",
+    "y-protocols/": "https://cdn.jsdelivr.net/npm/y-protocols@1.0.6/"
+  }
+}
+</script>
 <script type="module">
-import * as Y from 'https://esm.sh/yjs@13.6.20';
-import { WebsocketProvider } from 'https://esm.sh/y-websocket@2.0.4';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
 
 const roomEl = document.getElementById('roomId');
 const messagesEl = document.getElementById('messages');
@@ -136,15 +92,14 @@ let ydoc, ymessages, provider, myName = '';
 function getRoomId() {
   const hash = location.hash.replace('#', '');
   if (hash) return hash;
-  const id = Math.random().toString(36).substring(2, 10);
+  const id = Math.random().toString(36).substring(2, 8);
   history.replaceState(null, '', '#' + id);
   return id;
 }
 
 function connect(roomId) {
   ydoc = new Y.Doc();
-
-  provider = new WebsocketProvider('wss://demos.yjs.dev/ws', roomId, ydoc);
+  provider = new WebsocketProvider('wss://demos.yjs.dev', roomId, ydoc);
 
   provider.on('status', (event) => {
     if (event.status === 'connected') {
@@ -154,10 +109,8 @@ function connect(roomId) {
       sendBtn.disabled = false;
       msgInput.focus();
     } else if (event.status === 'disconnected') {
-      statusBar.textContent = 'Disconnected — will retry';
+      statusBar.textContent = 'Disconnected';
       statusBar.className = 'status-bar';
-      msgInput.disabled = true;
-      sendBtn.disabled = true;
     } else {
       statusBar.textContent = event.status;
       statusBar.className = 'status-bar';
@@ -165,14 +118,10 @@ function connect(roomId) {
   });
 
   ymessages = ydoc.getArray('messages');
-
-  ymessages.observe(() => {
-    renderMessages();
-  });
+  ymessages.observe(() => renderMessages());
 
   provider.awareness.on('change', () => {
-    const count = provider.awareness.getStates().size;
-    roomEl.textContent = roomId + ' (' + count + ' here)';
+    roomEl.textContent = roomId + ' (' + provider.awareness.getStates().size + ' here)';
   });
 
   renderMessages();
@@ -190,26 +139,17 @@ function renderMessages() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-function esc(t) {
-  var d = document.createElement('div');
-  d.textContent = t;
-  return d.innerHTML;
-}
+function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
 function sendMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  ymessages.push([{ name: myName, text: text, time: timeStr }]);
+  ymessages.push([{ name: myName, text: text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
   msgInput.value = '';
-  msgInput.focus();
 }
 
 sendBtn.addEventListener('click', sendMessage);
-msgInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendMessage();
-});
+msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
 
 joinBtn.addEventListener('click', () => {
   const name = nameInput.value.trim();
@@ -221,9 +161,7 @@ joinBtn.addEventListener('click', () => {
   connect(roomId);
 });
 
-nameInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') joinBtn.click();
-});
+nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
 </script>
 
 </body>
