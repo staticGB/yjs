@@ -27,27 +27,9 @@
   .input-area button:disabled { opacity: 0.5; cursor: default; }
   .status-bar { padding: 6px 20px; font-size: 11px; color: #8b949e; background: #161b22; border-top: 1px solid #30363d; text-align: center; }
   .status-bar.connected { color: #3fb950; }
-  .join-prompt { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; z-index: 100; }
-  .join-prompt.show { display: flex; }
-  .join-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 30px 40px; text-align: center; max-width: 400px; }
-  .join-box h2 { color: #c9d1d9; margin-bottom: 8px; font-size: 20px; }
-  .join-box p { color: #8b949e; font-size: 13px; margin-bottom: 20px; }
-  .join-box input { width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; color: #c9d1d9; font-size: 14px; outline: none; text-align: center; margin-bottom: 14px; }
-  .join-box input:focus { border-color: #58a6ff; }
-  .join-box button { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 10px 30px; font-size: 14px; cursor: pointer; font-weight: 500; }
-  .join-box button:hover { background: #2ea043; }
 </style>
 </head>
 <body>
-
-<div class="join-prompt show" id="joinPrompt">
-  <div class="join-box">
-    <h2>&#10022; Live Chat</h2>
-    <p>Pick a name and join the room</p>
-    <input type="text" id="nameInput" placeholder="Your name..." maxlength="20" autofocus><br>
-    <button id="joinBtn">Join Room</button>
-  </div>
-</div>
 
 <header>
   <h1>&#10022; Chat</h1>
@@ -64,30 +46,15 @@
 
 <div class="status-bar" id="statusBar">Connecting...</div>
 
-<script type="importmap">
-{
-  "imports": {
-    "yjs": "https://cdn.jsdelivr.net/npm/yjs@13.6.20/dist/yjs.mjs",
-    "y-websocket": "https://cdn.jsdelivr.net/npm/y-websocket@2.0.4/dist/y-websocket.mjs",
-    "lib0/": "https://cdn.jsdelivr.net/npm/lib0@0.2.100/",
-    "y-protocols/": "https://cdn.jsdelivr.net/npm/y-protocols@1.0.6/"
-  }
-}
-</script>
-<script type="module">
-import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
-
+<script src="https://unpkg.com/mqtt@5.10.3/dist/mqtt.min.js"></script>
+<script>
 const roomEl = document.getElementById('roomId');
 const messagesEl = document.getElementById('messages');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
 const statusBar = document.getElementById('statusBar');
-const joinPrompt = document.getElementById('joinPrompt');
-const nameInput = document.getElementById('nameInput');
-const joinBtn = document.getElementById('joinBtn');
 
-let ydoc, ymessages, provider, myName = '';
+let client, myName;
 
 function getRoomId() {
   const hash = location.hash.replace('#', '');
@@ -97,45 +64,66 @@ function getRoomId() {
   return id;
 }
 
-function connect(roomId) {
-  ydoc = new Y.Doc();
-  provider = new WebsocketProvider('wss://demos.yjs.dev', roomId, ydoc);
-
-  provider.on('status', (event) => {
-    if (event.status === 'connected') {
-      statusBar.textContent = 'Connected';
-      statusBar.className = 'status-bar connected';
-      msgInput.disabled = false;
-      sendBtn.disabled = false;
-      msgInput.focus();
-    } else if (event.status === 'disconnected') {
-      statusBar.textContent = 'Disconnected';
-      statusBar.className = 'status-bar';
-    } else {
-      statusBar.textContent = event.status;
-      statusBar.className = 'status-bar';
-    }
-  });
-
-  ymessages = ydoc.getArray('messages');
-  ymessages.observe(() => renderMessages());
-
-  provider.awareness.on('change', () => {
-    roomEl.textContent = roomId + ' (' + provider.awareness.getStates().size + ' here)';
-  });
-
-  renderMessages();
+function randomName() {
+  const n = Math.floor(Math.random() * 1000);
+  return 'little>buddy>' + n;
 }
 
-function renderMessages() {
-  const msgs = ymessages.toArray();
-  messagesEl.innerHTML = '';
-  msgs.forEach((msg) => {
-    const div = document.createElement('div');
-    div.className = msg.name === myName ? 'msg me' : 'msg them';
-    div.innerHTML = '<div class="name">' + esc(msg.name) + '</div>' + esc(msg.text) + '<div class="time">' + (msg.time || '') + '</div>';
-    messagesEl.appendChild(div);
+function connect(roomId) {
+  myName = randomName();
+  statusBar.textContent = 'Connecting as ' + myName + '...';
+
+  client = mqtt.connect('wss://test.mosquitto.org:8081', {
+    clientId: 'chat_' + Math.random().toString(36).substring(2, 10)
   });
+
+  client.on('connect', () => {
+    statusBar.textContent = 'Connected';
+    statusBar.className = 'status-bar connected';
+    msgInput.disabled = false;
+    sendBtn.disabled = false;
+    msgInput.focus();
+    roomEl.textContent = roomId;
+
+    client.subscribe('chat/' + roomId, { qos: 0 });
+
+    client.publish('chat/' + roomId, JSON.stringify({
+      type: 'join', name: myName
+    }));
+  });
+
+  client.on('message', (topic, payload) => {
+    try {
+      const data = JSON.parse(payload.toString());
+      if (data.type === 'msg') {
+        addMessage(data.name, data.text, data.time);
+      } else if (data.type === 'join' && data.name !== myName) {
+        addSystemMessage(data.name + ' joined');
+      }
+    } catch(e) {}
+  });
+
+  client.on('close', () => {
+    statusBar.textContent = 'Disconnected';
+    statusBar.className = 'status-bar';
+    msgInput.disabled = true;
+    sendBtn.disabled = true;
+  });
+}
+
+function addMessage(name, text, time) {
+  const div = document.createElement('div');
+  div.className = name === myName ? 'msg me' : 'msg them';
+  div.innerHTML = '<div class="name">' + esc(name) + '</div>' + esc(text) + '<div class="time">' + (time || '') + '</div>';
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function addSystemMessage(text) {
+  const div = document.createElement('div');
+  div.style.cssText = 'text-align:center;font-size:12px;color:#8b949e;padding:4px;';
+  div.textContent = text;
+  messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
@@ -143,25 +131,22 @@ function esc(t) { var d = document.createElement('div'); d.textContent = t; retu
 
 function sendMessage() {
   const text = msgInput.value.trim();
-  if (!text) return;
-  ymessages.push([{ name: myName, text: text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+  if (!text || !client) return;
   msgInput.value = '';
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  addMessage(myName, text, timeStr);
+  client.publish('chat/' + getRoomId(), JSON.stringify({
+    type: 'msg', name: myName, text: text, time: timeStr
+  }));
 }
 
 sendBtn.addEventListener('click', sendMessage);
 msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
 
-joinBtn.addEventListener('click', () => {
-  const name = nameInput.value.trim();
-  if (!name) { nameInput.focus(); return; }
-  myName = name;
-  joinPrompt.classList.remove('show');
-  const roomId = getRoomId();
-  roomEl.textContent = roomId + ' (joining...)';
-  connect(roomId);
-});
-
-nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
+// Auto-connect on page load
+const roomId = getRoomId();
+roomEl.textContent = roomId + ' (starting...)';
+connect(roomId);
 </script>
 
 </body>
