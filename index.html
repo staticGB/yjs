@@ -9,6 +9,7 @@
   body { background: #0d1117; color: #c9d1d9; font-family: system-ui, -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; }
   header { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: #161b22; border-bottom: 1px solid #30363d; }
   header h1 { font-size: 16px; font-weight: 600; color: #58a6ff; }
+  header h1 span { font-size: 12px; color: #8b949e; font-weight: 400; margin-left: 8px; }
   .room-info { font-size: 12px; color: #8b949e; }
   .room-info span { color: #58a6ff; }
   .main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -27,12 +28,13 @@
   .input-area button:disabled { opacity: 0.5; cursor: default; }
   .status-bar { padding: 6px 20px; font-size: 11px; color: #8b949e; background: #161b22; border-top: 1px solid #30363d; text-align: center; }
   .status-bar.connected { color: #3fb950; }
+  .history-count { font-size: 11px; color: #8b949e; margin-top: 8px; text-align: center; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>&#10022; Chat</h1>
+  <h1>&#10022; Chat <span id="historyCount">persistent</span></h1>
   <div class="room-info">Room: <span id="roomId">---</span></div>
 </header>
 
@@ -53,8 +55,10 @@ const messagesEl = document.getElementById('messages');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
 const statusBar = document.getElementById('statusBar');
+const historyCount = document.getElementById('historyCount');
 
-let client, myName;
+let client, myName, messageHistory = [];
+const seenIds = new Set();
 
 function getRoomId() {
   const hash = location.hash.replace('#', '');
@@ -74,31 +78,74 @@ function connect(roomId) {
   statusBar.textContent = 'Connecting as ' + myName + '...';
 
   client = mqtt.connect('wss://test.mosquitto.org:8081', {
-    clientId: 'chat_' + Math.random().toString(36).substring(2, 10)
+    clientId: 'chatv2_' + Math.random().toString(36).substring(2, 10)
   });
 
   client.on('connect', () => {
-    statusBar.textContent = 'Connected';
+    statusBar.textContent = 'Loading history...';
     statusBar.className = 'status-bar connected';
-    msgInput.disabled = false;
-    sendBtn.disabled = false;
-    msgInput.focus();
     roomEl.textContent = roomId;
 
-    client.subscribe('chat/' + roomId, { qos: 0 });
+    // Subscribe to history topic (retained — gives us all past messages)
+    client.subscribe('chat/' + roomId + '/history');
 
-    client.publish('chat/' + roomId, JSON.stringify({
-      type: 'join', name: myName
-    }));
+    // Subscribe to live topic (new real-time messages)
+    client.subscribe('chat/' + roomId + '/live');
+
+    // Announce join
+    const joinMsg = { id: randomId(), type: 'join', name: myName, time: Date.now() };
+    client.publish('chat/' + roomId + '/live', JSON.stringify(joinMsg));
   });
 
   client.on('message', (topic, payload) => {
     try {
-      const data = JSON.parse(payload.toString());
+      const raw = payload.toString();
+
+      // Handle history topic — full JSON array of past messages
+      if (topic.endsWith('/history')) {
+        const history = JSON.parse(raw);
+        if (Array.isArray(history) && history.length > 0) {
+          // Merge history (avoid duplicating messages we already have)
+          for (const msg of history) {
+            if (!seenIds.has(msg.id)) {
+              seenIds.add(msg.id);
+              messageHistory.push(msg);
+              if (msg.type === 'msg') {
+                renderMessage(msg);
+              }
+            }
+          }
+          statusBar.textContent = 'Connected (' + messageHistory.length + ' messages)';
+          enableChat();
+        }
+        return;
+      }
+
+      // Handle live topic — individual messages
+      if (topic.endsWith('/live')) {
+        const data = JSON.parse(raw);
+        if (!data.id) data.id = randomId();
+        if (seenIds.has(data.id)) return; // dedup
+        seenIds.add(data.id);
+
+        if (data.type === 'msg') {
+          messageHistory.push(data);
+          renderMessage(data);
+          if (data.name !== myName) {
+            statusBar.textContent = 'Connected (' + messageHistory.length + ' messages)';
+          }
+        }
+        return;
+      }
+
+      // Fallback: old single-topic format
+      const data = JSON.parse(raw);
       if (data.type === 'msg') {
-        addMessage(data.name, data.text, data.time);
-      } else if (data.type === 'join' && data.name !== myName) {
-        addSystemMessage(data.name + ' joined');
+        if (!data.id) data.id = randomId();
+        if (seenIds.has(data.id)) return;
+        seenIds.add(data.id);
+        messageHistory.push(data);
+        renderMessage(data);
       }
     } catch(e) {}
   });
@@ -111,12 +158,20 @@ function connect(roomId) {
   });
 }
 
-function addMessage(name, text, time) {
+function enableChat() {
+  msgInput.disabled = false;
+  sendBtn.disabled = false;
+  msgInput.focus();
+}
+
+function renderMessage(data) {
   const div = document.createElement('div');
-  div.className = name === myName ? 'msg me' : 'msg them';
-  div.innerHTML = '<div class="name">' + esc(name) + '</div>' + esc(text) + '<div class="time">' + (time || '') + '</div>';
+  div.className = data.name === myName ? 'msg me' : 'msg them';
+  const timeStr = data.timeStr || (data.time ? new Date(data.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+  div.innerHTML = '<div class="name">' + esc(data.name) + '</div>' + esc(data.text) + '<div class="time">' + timeStr + '</div>';
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+  historyCount.textContent = messageHistory.length + ' msgs';
 }
 
 function addSystemMessage(text) {
@@ -129,15 +184,37 @@ function addSystemMessage(text) {
 
 function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
+function randomId() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+}
+
 function sendMessage() {
   const text = msgInput.value.trim();
   if (!text || !client) return;
   msgInput.value = '';
-  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  addMessage(myName, text, timeStr);
-  client.publish('chat/' + getRoomId(), JSON.stringify({
-    type: 'msg', name: myName, text: text, time: timeStr
-  }));
+  msgInput.focus();
+
+  const msg = {
+    id: randomId(),
+    type: 'msg',
+    name: myName,
+    text: text,
+    time: Date.now(),
+    timeStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  };
+
+  // Add to local history
+  messageHistory.push(msg);
+  seenIds.add(msg.id);
+  renderMessage(msg);
+
+  // Publish live (for other connected clients)
+  client.publish('chat/' + getRoomId() + '/live', JSON.stringify(msg));
+
+  // Update retained history (so latecomers see everything)
+  client.publish('chat/' + getRoomId() + '/history', JSON.stringify(messageHistory), { retain: true });
+
+  statusBar.textContent = 'Connected (' + messageHistory.length + ' messages)';
 }
 
 sendBtn.addEventListener('click', sendMessage);
