@@ -120,7 +120,7 @@
 
 <script type="module">
 import * as Y from 'https://esm.sh/yjs@13.6.20';
-import { WebrtcProvider } from 'https://esm.sh/y-webrtc@13.6.20';
+import { WebsocketProvider } from 'https://esm.sh/y-websocket@2.0.4';
 
 const roomEl = document.getElementById('roomId');
 const messagesEl = document.getElementById('messages');
@@ -143,10 +143,8 @@ function getRoomId() {
 
 function connect(roomId) {
   ydoc = new Y.Doc();
-  
-  provider = new WebrtcProvider(roomId, ydoc, {
-    signaling: ['wss://signaling.yjs.dev']
-  });
+
+  provider = new WebsocketProvider('wss://demos.yjs.dev/ws', roomId, ydoc);
 
   provider.on('status', (event) => {
     if (event.status === 'connected') {
@@ -156,7 +154,7 @@ function connect(roomId) {
       sendBtn.disabled = false;
       msgInput.focus();
     } else if (event.status === 'disconnected') {
-      statusBar.textContent = 'Disconnected';
+      statusBar.textContent = 'Disconnected — will retry';
       statusBar.className = 'status-bar';
       msgInput.disabled = true;
       sendBtn.disabled = true;
@@ -172,12 +170,11 @@ function connect(roomId) {
     renderMessages();
   });
 
-  // Show room with peer count
   provider.awareness.on('change', () => {
     const count = provider.awareness.getStates().size;
     roomEl.textContent = roomId + ' (' + count + ' here)';
   });
-  
+
   renderMessages();
 }
 
